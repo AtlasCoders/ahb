@@ -22,4 +22,4 @@ jobs:
           cargo build
           ls -l
           cp target/debug/ahb .
-          ahb --url www.google.com
+          ./ahb --url www.google.com
