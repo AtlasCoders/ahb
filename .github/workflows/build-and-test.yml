@@ -17,7 +17,7 @@ jobs:
         uses: ATiltedTree/setup-rust@v1.0.5
         with:
           rust-version: stable
-      - name: Build
-        run: cargo check
-      - name: Test
-        run: cargo run --url www.google.com
+      - name: Build and Test
+        run: |
+          cargo check
+          cargo run --url www.google.com
