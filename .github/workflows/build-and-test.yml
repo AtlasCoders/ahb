@@ -13,12 +13,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
-      - name: Set up Rust
-        uses: actions/setup-rust@v1
-
+      - name: Setup Rust
+        uses: ATiltedTree/setup-rust@v1.0.5
+        with:
+          rust-version: stable
       - name: Build
-        run: cargo build
-
+        run: cargo check
       - name: Test
         run: cargo run --url www.google.com
