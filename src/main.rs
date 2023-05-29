@@ -2,6 +2,7 @@ use clap::Parser;
 use reqwest::{Client, Response};
 use std::error::Error;
 use std::time::{Instant, Duration};
+use serde::{Serialize, Deserialize};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -35,23 +36,77 @@ fn print_request_info(response: &Response, method: &str, duration: Duration) {
     println!();
 }
 
+//JSON FORMAT
+#[derive(Deserialize)]
+struct response_Person{
+    id : i32,
+  username : String,
+  email: String,
+  firstName: String,
+  lastName: String,
+  gender: String,
+  image: String,
+  token: String,
+}
+
+pub async fn get_method(url : &str)-> Result<String, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    let body = client.get(url).send()
+        .await?
+        .text()
+        .await?;
+
+    Ok(body)
+}
+
+
+pub async fn post_method(url : &str,json_data : &str)-> Result<String, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    //Return text JSON
+    let body = client.post(url)
+        .body(json_data.to_owned())
+        .header("Content-Type","application/json")
+        .send()
+        .await?
+        .text()
+        .await?;
+
+        //Return deserialize JSON
+        // let body = client.post(url)
+        // .body(json_data.to_owned())
+        // .header("Content-Type","application/json")
+        // .send()
+        // .await?
+        // .json::<response_Person>()
+        // .await?;
+
+        // println!("{:?}",body.id);
+
+    Ok(body)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let args = Args::parse();
+    // let args = Args::parse();
 
-    // Retrieve the values from parsed arguments
-    let url = args.url;
-    let method = args.method;
+    // // Retrieve the values from parsed arguments
+    // let url = args.url;
+    // let method = args.method;
 
-    // Make the request
-    let start_time = Instant::now();
-    let response = make_request(&url, &method).await?;
-    let duration = start_time.elapsed();
+    // // Make the request
+    // let start_time = Instant::now();
+    // let response = make_request(&url, &method).await?;
+    // let duration = start_time.elapsed();
 
-    print_request_info(&response, &method, duration);
+    // print_request_info(&response, &method, duration);
 
-    // Handle the response as needed
-    // ...
+    //POST METHOD
+    let json_data = r#"{"username": "kminchelle", "password": "0lelplR"}"#;
+    let res = post_method("https://dummyjson.com/auth/login",json_data).await;
+
+     println!("{:?}",res);
+
 
     Ok(())
 }
