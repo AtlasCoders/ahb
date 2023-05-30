@@ -2,7 +2,6 @@ use clap::Parser;
 use reqwest:: Response;
 use std::error::Error;
 use std::time::{Instant, Duration};
-
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -30,6 +29,7 @@ fn print_request_info(response: &Response, method: &str, duration: Duration) {
     println!("Method: {}", method);
     println!("Response Duration: {:?}", duration);
 }
+
 pub async fn get_method(url : &str)-> Result<Response, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let response = client.get(url).send()
@@ -38,7 +38,7 @@ pub async fn get_method(url : &str)-> Result<Response, Box<dyn std::error::Error
 }
 
 pub async fn post_method(url : &str,json_data : &str)-> Result<Response, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
+ let client = reqwest::Client::new();
 
     let response = client.post(url)
         .body(json_data.to_owned())
@@ -48,6 +48,7 @@ pub async fn post_method(url : &str,json_data : &str)-> Result<Response, Box<dyn
 
     Ok(response)
 }
+
 
 pub async fn delete_method(url : &str,json_data : &str)-> Result<Response, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
@@ -77,7 +78,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
      let url = args.url;
      let method = args.method;
      let json_data = args.json_data;
-     let response;
+     let json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");//JSON Validation
+     let response; 
     // Make the request
     let start_time = Instant::now();
     response = match method.to_uppercase().as_str() {
