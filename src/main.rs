@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
      let url = args.url;
      let method = args.method;
      let json_data = args.json_data;
-     let json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");//JSON Validation
+     let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");//JSON Validation
      let response; 
     // Make the request
     let start_time = Instant::now();
