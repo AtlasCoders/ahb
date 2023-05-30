@@ -1,0 +1,20 @@
+name: AHB Pull request verification
+
+on:
+  pull_request: {}
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Setup Rust
+        uses: ATiltedTree/setup-rust@v1.0.5
+        with:
+          rust-version: stable
+      - name: Build
+        run: |
+          cargo build
