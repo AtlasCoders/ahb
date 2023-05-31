@@ -78,10 +78,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
      let method = args.method.to_uppercase();
      let json_data = args.json_data;
      //JSON Validation
-    //  if method != "GET"
-    //  {
-    //     let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");
-    //  }
+     if method != "GET"
+     {
+        let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");
+     }
      let response; 
     // Make the request
     let start_time = Instant::now();
