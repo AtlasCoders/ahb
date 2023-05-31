@@ -70,19 +70,22 @@ pub async fn put_method(url : &str,json_data : &str)-> Result<Response, Box<dyn 
     Ok(response)
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
      let args = Args::parse();
     // // Retrieve the values from parsed arguments
      let url = args.url;
-     let method = args.method;
+     let method = args.method.to_uppercase();
      let json_data = args.json_data;
-     let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");//JSON Validation
+     //JSON Validation
+    //  if method != "GET"
+    //  {
+    //     let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");
+    //  }
      let response; 
     // Make the request
     let start_time = Instant::now();
-    response = match method.to_uppercase().as_str() {
+    response = match method.as_str() {
         "GET" =>  get_method(&url).await?,
         "POST" => post_method(&url,&json_data).await?,
         "DELETE" =>  delete_method(&url,&json_data).await?,
@@ -93,4 +96,66 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let duration = start_time.elapsed();
     print_request_info(&response, &method, duration);
     Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn get_request() {
+        let url = "http://scooterlabs.com/echo";
+        assert!(get_method(&url).await.expect("NO Response").status().is_success());
+    }
+
+    #[tokio::test]
+    async fn get_request_with_invalid_url() {
+        let url = "http://scooterlabs.cm/echo";
+        assert!(get_method(&url).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn post_request() {
+        let url = "http://scooterlabs.com/echo";
+        let json_data = r#"
+        {
+            "name": "John Doe",
+            "age": 43,
+            "phones": [
+                "+44 1234567",
+                "+44 2345678"
+            ]
+        }"#;
+        assert!(post_method(&url,&json_data).await.expect("NO Response").status().is_success());
+    }
+
+    #[tokio::test]
+    async fn delete_request() {
+        let url = "http://scooterlabs.com/echo";
+        let json_data = r#"
+        {
+            "name": "John Doe",
+            "age": 43,
+            "phones": [
+                "+44 1234567",
+                "+44 2345678"
+            ]
+        }"#;
+        assert!(delete_method(&url,&json_data).await.expect("NO Response").status().is_success());
+    }
+
+    #[tokio::test]
+    async fn put_request() {
+        let url = "http://scooterlabs.com/echo";
+        let json_data = r#"
+        {
+            "name": "John Doe",
+            "age": 43,
+            "phones": [
+                "+44 1234567",
+                "+44 2345678"
+            ]
+        }"#;
+        assert!(put_method(&url,&json_data).await.expect("NO Response").status().is_success());
+    }
+
 }
