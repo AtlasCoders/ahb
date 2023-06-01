@@ -20,6 +20,4 @@ jobs:
       - name: Build and Test
         run: |
           cargo build
-          ls -l
-          cp target/debug/ahb .
-          ./ahb --url https://www.google.com
+          cargo test
