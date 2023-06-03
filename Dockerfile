@@ -1,6 +1,11 @@
 FROM rust:latest
+
 WORKDIR /usr/src/ahb
-COPY Cargo.toml .
-COPY src ./src
+
+COPY . .
+
+RUN cargo build --release
+
 RUN cargo install --path .
-CMD ["ahb", "--help"]
+
+CMD ["/usr/local/cargo/bin/ahb"]
