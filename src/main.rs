@@ -3,6 +3,9 @@ use reqwest:: Response;
 use reqwest::header::{HeaderMap, HeaderValue};
 use std::error::Error;
 use std::time::{Instant, Duration};
+use tokio::task;
+use futures::future::join_all;
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -117,18 +120,46 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");
      }
     let start_time = Instant::now();
-    let (response_text, response_code, response_headers) = match method.as_str() {
-        "GET" => get_method(&url).await?,
-        "POST" => post_method(&url, &json_data).await?,
-        "DELETE" => delete_method(&url, &json_data).await?,
-        "PUT" => put_method(&url, &json_data).await?,
-        _ => {
-            eprintln!("Error: {:#?}", "Invalid Method");
-            std::process::exit(1);
-        }
-    };   
+    let concurrency = args.concurrency as usize;
+    let mut tasks = Vec::new();
+
+    for _ in 0..concurrency {
+        let url = url.clone();
+        let json_data = json_data.clone();
+        let method = method.clone();
+
+        let task = task::spawn(async move {
+            let result = match method.as_str() {
+                "GET" => get_method(&url).await,
+                "POST" => post_method(&url, &json_data).await,
+                "DELETE" => delete_method(&url, &json_data).await,
+                "PUT" => put_method(&url, &json_data).await,
+                _ => {
+                    eprintln!("Error: {:#?}", "Invalid Method");
+                    std::process::exit(1);
+                }
+            };
+            match result {
+                Ok((response_text, response_code, response_headers)) => {
+                    Some((response_text, response_code, response_headers))
+                }
+                Err(err) => {
+                    eprintln!("Error: {:#?}", err);
+                    None
+                }
+            }        });
+        tasks.push(task);
+    }
+
+    let results = join_all(tasks).await;
     let duration = start_time.elapsed();
-    print_request_info(response_code, response_text, response_headers, duration);
+
+    for result in results {
+        if let Ok(Some((response_text, response_code, response_headers))) = result {
+            print_request_info(response_code, response_text, response_headers, duration);
+        }
+    }
+
     Ok(())
 }
 #[cfg(test)]
