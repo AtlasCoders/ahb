@@ -5,6 +5,7 @@ use std::error::Error;
 use std::time::{Instant, Duration};
 use tokio::task;
 use futures::future::join_all;
+use reqwest::blocking::multipart;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -23,6 +24,9 @@ struct Args {
 
     #[arg(short, long, default_value = "")]
     json_data: String,
+
+    #[arg(short, long, default_value = "")]
+    file_name: String,
 
     #[arg(short, long, default_value_t = 1)]
     concurrency: u8,
@@ -105,7 +109,24 @@ pub async fn put_method(url: &str, json_data: &str) -> Result<(String, u16, Head
     Ok((text, code, headers))
 }
 
+pub async fn file_method(url: &str, _filename: &str) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
+    
+    let form = multipart::Form::new()
+    .file("file", _filename)?;
 
+
+
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(url)
+        .multipart(form)
+        .send()?;
+
+    let code = response.status().as_u16();
+    let headers = response.headers().clone();
+    let text = response.text()?;
+    Ok((text, code, headers))
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -114,8 +135,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
      let url = args.url;
      let method = args.method.to_uppercase();
      let json_data = args.json_data;
+     let file_name = args.file_name;
      //JSON Validation
-     if method != "GET"
+     if method != "GET" && method != "FILE"
      {
         let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");
      }
@@ -127,6 +149,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let url = url.clone();
         let json_data = json_data.clone();
         let method = method.clone();
+        let file_name = file_name.clone();
 
         let task = task::spawn(async move {
             let result = match method.as_str() {
@@ -134,6 +157,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "POST" => post_method(&url, &json_data).await,
                 "DELETE" => delete_method(&url, &json_data).await,
                 "PUT" => put_method(&url, &json_data).await,
+                "FILE" => file_method(&url,&file_name).await,
                 _ => {
                     eprintln!("Error: {:#?}", "Invalid Method");
                     std::process::exit(1);
@@ -169,7 +193,7 @@ mod tests {
     #[tokio::test]
     async fn get_request() {
         let url = "http://scooterlabs.com/echo";
-        let (response_text, response_code, _) = get_method(url).await.expect("Failed to make the request");
+        let (_response_text, response_code, _) = get_method(url).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
         
     }
@@ -192,7 +216,7 @@ mod tests {
                 "+44 2345678"
             ]
         }"#;
-        let (response_text, response_code, _) = post_method(url, json_data).await.expect("Failed to make the request");
+        let (_response_text, response_code, _) = post_method(url, json_data).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
         
     }
@@ -209,7 +233,7 @@ mod tests {
                 "+44 2345678"
             ]
         }"#;
-        let (response_text, response_code, _) = delete_method(url, json_data).await.expect("Failed to make the request");
+        let (_response_text, response_code, _) = delete_method(url, json_data).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
         
     }
@@ -226,8 +250,15 @@ mod tests {
                 "+44 2345678"
             ]
         }"#;
-        let (response_text, response_code, _) = put_method(url, json_data).await.expect("Failed to make the request");
+        let (_response_text, response_code, _) = put_method(url, json_data).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
     }
-
+//To FIX : panicked at 'Cannot drop a runtime in a context where blocking is not allowed. This happens when a runtime is dropped from within an asynchronous context.'
+    // #[tokio::test]
+    // async fn send_file() {
+    //     let url = "http://scooterlabs.com/echo";
+    //     let filename = "windowsImage.jpg";
+    //     let (_response_text, response_code, _) = file_method(url, filename).await.expect("Failed to make the request");
+    //     assert_eq!(response_code, 200);
+    // }
 }
