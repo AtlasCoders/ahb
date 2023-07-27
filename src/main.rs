@@ -302,7 +302,7 @@ mod tests {
         //New thread
         let handle = tokio::spawn(async {
             let url = "http://scooterlabs.com/echo";
-            let filename = "ressources/windowsImage.jpg";
+            let filename = "resources/windowsImage.jpg";
             let json_data = r#"
             {
                 "name": "John Doe",
