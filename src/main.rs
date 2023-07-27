@@ -253,12 +253,16 @@ mod tests {
         let (_response_text, response_code, _) = put_method(url, json_data).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
     }
-//To FIX : panicked at 'Cannot drop a runtime in a context where blocking is not allowed. This happens when a runtime is dropped from within an asynchronous context.'
-    // #[tokio::test]
-    // async fn send_file() {
-    //     let url = "http://scooterlabs.com/echo";
-    //     let filename = "windowsImage.jpg";
-    //     let (_response_text, response_code, _) = file_method(url, filename).await.expect("Failed to make the request");
-    //     assert_eq!(response_code, 200);
-    // }
+
+    #[tokio::test]
+    async fn send_file() {
+        //New thread
+        let handle = tokio::spawn(async {
+            let url = "http://scooterlabs.com/echo";
+            let filename = "windowsImage.jpg";
+            let (_response_text, response_code, _) = file_method(url, filename).await.expect("Failed to make the request");
+            assert_eq!(response_code, 200);
+        });
+        let _ = handle.await;
+    }
 }
