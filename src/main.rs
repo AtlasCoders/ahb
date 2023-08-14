@@ -6,7 +6,6 @@ use std::convert::TryInto;
 use std::time::{Instant, Duration};
 use tokio::task;
 use futures::future::join_all;
-use reqwest::blocking::multipart;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -25,9 +24,6 @@ struct Args {
 
     #[arg(short, long, default_value = "")]
     json_data: String,
-
-    #[arg(short, long, default_value = "")]
-    file: String,
 
     #[arg(short, long, default_value_t = 1)]
     concurrency: u8,
@@ -89,49 +85,19 @@ pub async fn get_method(url: &str, headers: &HeaderMap) -> Result<(String, u16, 
     Ok((text, code, headers))
 }
 
-pub async fn post_method(url: &str, json_data: &str,file: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
-    let code;
-    let responseHeaders;
-    let text;
+pub async fn post_method(url: &str, json_data: &str) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
 
-   
-    if !file.is_empty()
-    {
-        let bio = multipart::Part::text(json_data.to_owned())
-        .mime_str("application/json")?;
-
-        let form = multipart::Form::new()
-        .part("data",bio)
-        .file("file", file)?;
-
-        let client = reqwest::blocking::Client::new();
-        let mut request = client.post(url).multipart(form);
-        request = request.headers(headers.clone());
-        let response = request.send()?;
-
-        code = response.status().as_u16();
-        responseHeaders = response.headers().clone();
-        text = response.text()?;
-
-    }
-    else
-    {
-        let client = reqwest::Client::new();
-
-        let response = client
+    let response = client
         .post(url)
         .body(json_data.to_owned())
         .header("Content-Type", "application/json")
         .send()
         .await?;
 
-     code = response.status().as_u16();
-     responseHeaders = response.headers().clone();
-     text = response.text().await?;
-
-    }
-
-
+    let code = response.status().as_u16();
+    let responseHeaders = response.headers().clone();
+    let text = response.text().await?;
     Ok((text, code, responseHeaders))
 }
 
@@ -147,6 +113,9 @@ pub async fn delete_method(url: &str, json_data: &str, headers: &HeaderMap) -> R
     Ok((text, code, responseHeaders))
 }
 
+pub async fn put_method(url: &str, json_data: &str) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    let response = client
 pub async fn put_method(url: &str, json_data: &str,file: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
     let code ;
     let responseHeaders;
@@ -183,18 +152,26 @@ pub async fn put_method(url: &str, json_data: &str,file: &str, headers: &HeaderM
         .send()
         .await?;
 
-     code = response.status().as_u16();
-     responseHeaders = response.headers().clone();
-     text = response.text().await?;
-
-    }
-
-
+    let code = response.status().as_u16();
+    let responseHeaders = response.headers().clone();
+    let text = response.text().await?;
     Ok((text, code, responseHeaders))
 }
-    
+
+
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+     let args = Args::parse();
+    // // Retrieve the values from parsed arguments
+     let url = args.url;
+     let method = args.method.to_uppercase();
+     let json_data = args.json_data;
+     //JSON Validation
+     if method != "GET"
+     {
+        let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");
+     }
     let args = Args::parse();
     let url = args.url;
     let headers = args.header;
@@ -216,14 +193,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let url = url.clone();
         let json_data = json_data.clone();
         let method = method.clone();
-        let file = file.clone();
         let headers = headers_map;
         let task = task::spawn(async move {
             let result = match method.as_str() {
                 "GET" => get_method(&url, &headers_map).await,
-                "POST" => post_method(&url, &json_data, &file, &headers_map).await,
+                "POST" => post_method(&url, &json_data, &headers_map).await,
                 "DELETE" => delete_method(&url, &json_data, &headers_map).await,
-                "PUT" => put_method(&url, &json_data, &file, &headers_map).await,
+                "PUT" => put_method(&url, &json_data, &headers_map).await,
                 _ => {
                     eprintln!("Error: {:#?}", "Invalid Method");
                     std::process::exit(1);
@@ -260,7 +236,7 @@ mod tests {
     #[tokio::test]
     async fn get_request() {
         let url = "http://scooterlabs.com/echo";
-        let (_response_text, response_code, _) = get_method(url).await.expect("Failed to make the request");
+        let (response_text, response_code, _) = get_method(url).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
         
     }
@@ -283,7 +259,7 @@ mod tests {
                 "+44 2345678"
             ]
         }"#;
-        let (_response_text, response_code, _) = post_method(url, json_data,"").await.expect("Failed to make the request");
+        let (response_text, response_code, _) = post_method(url, json_data).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
         
     }
@@ -300,7 +276,7 @@ mod tests {
                 "+44 2345678"
             ]
         }"#;
-        let (_response_text, response_code, _) = delete_method(url, json_data).await.expect("Failed to make the request");
+        let (response_text, response_code, _) = delete_method(url, json_data).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
         
     }
@@ -317,49 +293,8 @@ mod tests {
                 "+44 2345678"
             ]
         }"#;
-        let (_response_text, response_code, _) = put_method(url, json_data,"").await.expect("Failed to make the request");
+        let (response_text, response_code, _) = put_method(url, json_data).await.expect("Failed to make the request");
         assert_eq!(response_code, 200);
     }
 
-    #[tokio::test]
-    async fn post_request_with_file() {
-        //New thread
-        let handle = tokio::spawn(async {
-            let url = "http://scooterlabs.com/echo";
-            let filename = "resources/windowsImage.jpg";
-            let json_data = r#"
-            {
-                "name": "John Doe",
-                "age": 43,
-                "phones": [
-                    "+44 1234567",
-                    "+44 2345678"
-                ]
-            }"#;
-            let (_response_text, response_code, _) = post_method(url, json_data, filename).await.expect("Failed to make the request");
-            assert_eq!(response_code, 200);
-        });
-        let _ = handle.await;
-    }
-
-    #[tokio::test]
-    async fn put_request_with_file() {
-        //New thread
-        let handle = tokio::spawn(async {
-            let url = "http://scooterlabs.com/echo";
-            let filename = "resources/windowsImage.jpg";
-            let json_data = r#"
-            {
-                "name": "John Doe",
-                "age": 43,
-                "phones": [
-                    "+44 1234567",
-                    "+44 2345678"
-                ]
-            }"#;
-            let (_response_text, response_code, _) = put_method(url, json_data, filename).await.expect("Failed to make the request");
-            assert_eq!(response_code, 200);
-        });
-        let _ = handle.await;
-    }
 }
