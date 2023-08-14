@@ -1,8 +1,7 @@
 use clap::Parser;
 use reqwest:: Response;
-use reqwest::header::{HeaderMap, HeaderValue, IntoHeaderName};
+use reqwest::header::{HeaderMap, HeaderValue};
 use std::error::Error;
-use std::convert::TryInto;
 use std::time::{Instant, Duration};
 use tokio::task;
 use futures::future::join_all;
@@ -31,30 +30,7 @@ struct Args {
 
     #[arg(short, long, default_value_t = 1)]
     concurrency: u8,
-
-    #[arg(short, long)]
-    header: Vec<String>,
 }
-
-
-pub fn parse_headers(header_strings: Vec<String>) -> Result<HeaderMap, Box<dyn Error>> {
-    let mut header_map = HeaderMap::new();
-
-    for header in header_strings {
-        let parts: Vec<&str> = header.splitn(2, ':').collect();
-        if parts.len() == 2 {
-            header_map.insert(
-                parts[0].trim(),
-                HeaderValue::from_str(parts[1].trim())?,
-            );
-        } else {
-            return Err("Invalid header format".into());
-        }
-    }
-
-    Ok(header_map)
-}
-
 
 fn print_headers(headers: &HeaderMap) {
     for (name, value) in headers {
@@ -78,21 +54,19 @@ fn print_request_info(response_code: u16, response_text: String, response_header
     println!("Response Duration: {:.3?}", duration);
 }
 
-pub async fn get_method(url: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
+pub async fn get_method(url: &str) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
-    let mut request = client.get(url);
-    request = request.headers(headers.clone());
-    let response = request.send().await?;
+    let response = client.get(url).send().await?;
     let code = response.status().as_u16();
     let headers = response.headers().clone();
     let text = response.text().await?;
     Ok((text, code, headers))
 }
 
-pub async fn post_method(url: &str, json_data: &str,file: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
-    let code;
-    let responseHeaders;
-    let text;
+pub async fn post_method(url: &str, json_data: &str,file: &str) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
+    let code ;
+    let headers;
+    let text ;
 
    
     if !file.is_empty()
@@ -105,12 +79,13 @@ pub async fn post_method(url: &str, json_data: &str,file: &str, headers: &Header
         .file("file", file)?;
 
         let client = reqwest::blocking::Client::new();
-        let mut request = client.post(url).multipart(form);
-        request = request.headers(headers.clone());
-        let response = request.send()?;
+        let response = client
+            .post(url)
+            .multipart(form)
+            .send()?;
 
         code = response.status().as_u16();
-        responseHeaders = response.headers().clone();
+        headers = response.headers().clone();
         text = response.text()?;
 
     }
@@ -126,30 +101,33 @@ pub async fn post_method(url: &str, json_data: &str,file: &str, headers: &Header
         .await?;
 
      code = response.status().as_u16();
-     responseHeaders = response.headers().clone();
+     headers = response.headers().clone();
      text = response.text().await?;
 
     }
 
 
-    Ok((text, code, responseHeaders))
+    Ok((text, code, headers))
 }
 
-pub async fn delete_method(url: &str, json_data: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
+pub async fn delete_method(url: &str, json_data: &str) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
-    let mut request = client.delete(url).body(json_data.to_owned());
-    request = request.headers(headers.clone());
-    let response = request.send().await?;
+    let response = client
+        .delete(url)
+        .body(json_data.to_owned())
+        .header("Content-Type", "application/json")
+        .send()
+        .await?;
 
     let code = response.status().as_u16();
-    let responseHeaders = response.headers().clone();
+    let headers = response.headers().clone();
     let text = response.text().await?;
-    Ok((text, code, responseHeaders))
+    Ok((text, code, headers))
 }
 
-pub async fn put_method(url: &str, json_data: &str,file: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
+pub async fn put_method(url: &str, json_data: &str,file: &str) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
     let code ;
-    let responseHeaders;
+    let headers;
     let text ;
 
    
@@ -163,12 +141,13 @@ pub async fn put_method(url: &str, json_data: &str,file: &str, headers: &HeaderM
         .file("file", file)?;
 
         let client = reqwest::blocking::Client::new();
-        let mut request = client.put(url).multipart(form);
-        request = request.headers(headers.clone());
-        let response = request.send()?;
+        let response = client
+            .put(url)
+            .multipart(form)
+            .send()?;
 
         code = response.status().as_u16();
-        responseHeaders = response.headers().clone();
+        headers = response.headers().clone();
         text = response.text()?;
 
     }
@@ -184,30 +163,28 @@ pub async fn put_method(url: &str, json_data: &str,file: &str, headers: &HeaderM
         .await?;
 
      code = response.status().as_u16();
-     responseHeaders = response.headers().clone();
+     headers = response.headers().clone();
      text = response.text().await?;
 
     }
 
 
-    Ok((text, code, responseHeaders))
+    Ok((text, code, headers))
 }
     
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let args = Args::parse();
-    let url = args.url;
-    let headers = args.header;
-
-    let headers_map = parse_headers(headers)?;
-    let method = args.method.to_uppercase();
-    let json_data = args.json_data;
-    let file = args.file;
-    //JSON Validation
-    if method != "GET"
-    {
-    let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");
-    }
+     let args = Args::parse();
+    // // Retrieve the values from parsed arguments
+     let url = args.url;
+     let method = args.method.to_uppercase();
+     let json_data = args.json_data;
+     let file = args.file;
+     //JSON Validation
+     if method != "GET"
+     {
+        let _json : serde_json::Value =serde_json::from_str(&json_data[..]).expect("JSON was not well-formatted");
+     }
     let start_time = Instant::now();
     let concurrency = args.concurrency as usize;
     let mut tasks = Vec::new();
@@ -217,13 +194,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let json_data = json_data.clone();
         let method = method.clone();
         let file = file.clone();
-        let headers = headers_map;
+
         let task = task::spawn(async move {
             let result = match method.as_str() {
-                "GET" => get_method(&url, &headers_map).await,
-                "POST" => post_method(&url, &json_data, &file, &headers_map).await,
-                "DELETE" => delete_method(&url, &json_data, &headers_map).await,
-                "PUT" => put_method(&url, &json_data, &file, &headers_map).await,
+                "GET" => get_method(&url).await,
+                "POST" => post_method(&url, &json_data, &file).await,
+                "DELETE" => delete_method(&url, &json_data).await,
+                "PUT" => put_method(&url, &json_data, &file).await,
                 _ => {
                     eprintln!("Error: {:#?}", "Invalid Method");
                     std::process::exit(1);
@@ -237,8 +214,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     eprintln!("Error: {:#?}", err);
                     None
                 }
-            }
-        });
+            }        });
         tasks.push(task);
     }
 
