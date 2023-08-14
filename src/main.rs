@@ -1,7 +1,8 @@
 use clap::Parser;
 use reqwest:: Response;
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderValue, IntoHeaderName};
 use std::error::Error;
+use std::convert::TryInto;
 use std::time::{Instant, Duration};
 use tokio::task;
 use futures::future::join_all;
@@ -32,25 +33,28 @@ struct Args {
     concurrency: u8,
 
     #[arg(short, long)]
-    headers: Vec<(String, String)>,
+    header: Vec<String>,
 }
 
-fn parse_headers(headers: Vec<String>) -> HeaderMap {
+
+pub fn parse_headers(header_strings: Vec<String>) -> Result<HeaderMap, Box<dyn Error>> {
     let mut header_map = HeaderMap::new();
-    for header_str in headers {
-        let parts: Vec<&str> = header_str.split(":").map(|part| part.trim()).collect();
+
+    for header in header_strings {
+        let parts: Vec<&str> = header.splitn(2, ':').collect();
         if parts.len() == 2 {
-            if let Ok(header_value) = HeaderValue::from_str(parts[1]) {
-                header_map.insert(parts[0].to_lowercase(), header_value);
-            } else {
-                eprintln!("Invalid header value for {}: {}", parts[0], parts[1]);
-            }
+            header_map.insert(
+                parts[0].trim(),
+                HeaderValue::from_str(parts[1].trim())?,
+            );
         } else {
-            eprintln!("Invalid header format: {}", header_str);
+            return Err("Invalid header format".into());
         }
     }
-    header_map
+
+    Ok(header_map)
 }
+
 
 fn print_headers(headers: &HeaderMap) {
     for (name, value) in headers {
@@ -86,9 +90,9 @@ pub async fn get_method(url: &str, headers: &HeaderMap) -> Result<(String, u16, 
 }
 
 pub async fn post_method(url: &str, json_data: &str,file: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
-    let code ;
-    let headers;
-    let text ;
+    let code;
+    let responseHeaders;
+    let text;
 
    
     if !file.is_empty()
@@ -106,7 +110,7 @@ pub async fn post_method(url: &str, json_data: &str,file: &str, headers: &Header
         let response = request.send()?;
 
         code = response.status().as_u16();
-        headers = response.headers().clone();
+        responseHeaders = response.headers().clone();
         text = response.text()?;
 
     }
@@ -122,13 +126,13 @@ pub async fn post_method(url: &str, json_data: &str,file: &str, headers: &Header
         .await?;
 
      code = response.status().as_u16();
-     headers = response.headers().clone();
+     responseHeaders = response.headers().clone();
      text = response.text().await?;
 
     }
 
 
-    Ok((text, code, headers))
+    Ok((text, code, responseHeaders))
 }
 
 pub async fn delete_method(url: &str, json_data: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
@@ -138,14 +142,14 @@ pub async fn delete_method(url: &str, json_data: &str, headers: &HeaderMap) -> R
     let response = request.send().await?;
 
     let code = response.status().as_u16();
-    let headers = response.headers().clone();
+    let responseHeaders = response.headers().clone();
     let text = response.text().await?;
-    Ok((text, code, headers))
+    Ok((text, code, responseHeaders))
 }
 
 pub async fn put_method(url: &str, json_data: &str,file: &str, headers: &HeaderMap) -> Result<(String, u16, HeaderMap), Box<dyn std::error::Error>> {
     let code ;
-    let headers;
+    let responseHeaders;
     let text ;
 
    
@@ -164,7 +168,7 @@ pub async fn put_method(url: &str, json_data: &str,file: &str, headers: &HeaderM
         let response = request.send()?;
 
         code = response.status().as_u16();
-        headers = response.headers().clone();
+        responseHeaders = response.headers().clone();
         text = response.text()?;
 
     }
@@ -180,21 +184,22 @@ pub async fn put_method(url: &str, json_data: &str,file: &str, headers: &HeaderM
         .await?;
 
      code = response.status().as_u16();
-     headers = response.headers().clone();
+     responseHeaders = response.headers().clone();
      text = response.text().await?;
 
     }
 
 
-    Ok((text, code, headers))
+    Ok((text, code, responseHeaders))
 }
     
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
-
     let url = args.url;
-    let headers = parse_headers(args.headers);
+    let headers = args.header;
+
+    let headers_map = parse_headers(headers)?;
     let method = args.method.to_uppercase();
     let json_data = args.json_data;
     let file = args.file;
@@ -212,13 +217,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let json_data = json_data.clone();
         let method = method.clone();
         let file = file.clone();
-
+        let headers = headers_map;
         let task = task::spawn(async move {
             let result = match method.as_str() {
-                "GET" => get_method(&url, &headers).await,
-                "POST" => post_method(&url, &json_data, &file, &headers).await,
-                "DELETE" => delete_method(&url, &json_data, &headers).await,
-                "PUT" => put_method(&url, &json_data, &file, &headers).await,
+                "GET" => get_method(&url, &headers_map).await,
+                "POST" => post_method(&url, &json_data, &file, &headers_map).await,
+                "DELETE" => delete_method(&url, &json_data, &headers_map).await,
+                "PUT" => put_method(&url, &json_data, &file, &headers_map).await,
                 _ => {
                     eprintln!("Error: {:#?}", "Invalid Method");
                     std::process::exit(1);
@@ -232,7 +237,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     eprintln!("Error: {:#?}", err);
                     None
                 }
-            }        });
+            }
+        });
         tasks.push(task);
     }
 
